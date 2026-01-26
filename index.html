@@ -417,7 +417,9 @@
         };
 
         // --- Firebase Polling & App Start ---
-        const startApp = () => {
+       const startApp = () => {
+            console.log("🚀 Firebase wordt geïnitialiseerd met:", window.ENV_PROJECT_ID);
+            
             const config = {
                 apiKey: window.ENV_API_KEY,
                 authDomain: window.ENV_AUTH_DOMAIN,
@@ -436,17 +438,29 @@
             root.render(<App />);
         };
 
+        let retryCount = 0;
         const checkConfigAndStart = () => {
-            // Controleer of de cruciale variabele ENV_API_KEY gevuld is
-            if (window.ENV_API_KEY && window.ENV_API_KEY !== 'undefined') {
+            // Debugging: zie wat Netlify daadwerkelijk in de pagina heeft gezet
+            console.log(`Poging ${retryCount}: API Key is:`, window.ENV_API_KEY);
+
+            const isValid = window.ENV_API_KEY && 
+                          window.ENV_API_KEY !== 'undefined' && 
+                          !window.ENV_API_KEY.includes('{{env');
+
+            if (isValid) {
+                console.log("✅ Configuratie gevonden! App start...");
                 startApp();
             } else {
-                // Indien niet gevonden, wacht 100ms en probeer opnieuw
+                retryCount++;
+                if (retryCount > 50) { // Stop na 5 seconden met proberen
+                    console.error("❌ Configuratie laden mislukt. Controleer Netlify Snippet Injection.");
+                    document.getElementById('root').innerHTML = "<div class='p-10 text-red-500 font-bold'>Fout: Kan Firebase-sleutels niet vinden. Controleer Netlify instellingen.</div>";
+                    return;
+                }
                 setTimeout(checkConfigAndStart, 100);
             }
         };
 
-        // Start het proces
         checkConfigAndStart();
 
     </script>
