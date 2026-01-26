@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TeamRooster v44</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-in { animation: fadeIn 0.3s ease-out forwards; }
+    </style>
+</head>
+<body class="bg-[#f8fafc] text-[#1e293b] font-sans text-left">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyA245VLavQatScTSg43GONSjGTa35jbpns",
+            authDomain: "rooster-zorgsaam.firebaseapp.com",
+            projectId: "rooster-zorgsaam",
+            storageBucket: "rooster-zorgsaam.firebasestorage.app",
+            messagingSenderId: "392518422646",
+            appId: "1:392518422646:web:9731772220cb1544674f57",
+            measurementId: "G-ZNKGTXMPKD"
+        };
+
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+        const appIdSlug = 'team-rooster-prod';
+
+        const TOUR_TYPES = [
+            { id: 'short', label: 'Korte tour' },
+            { id: 'long', label: 'Lange tour' },
+            { id: 'evening', label: 'Avond tour' },
+            { id: 'mini', label: 'Mini tour' }
+        ];
+
+        const App = () => {
+            const [user, setUser] = useState(null);
+            const [profile, setProfile] = useState(null);
+            const [team, setTeam] = useState([]);
+            const [requests, setRequests] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [authMode, setAuthMode] = useState('login'); 
+            const [email, setEmail] = useState('');
+            const [password, setPassword] = useState('');
+            const [name, setName] = useState('');
+            const [error, setError] = useState(null);
+            const [showEmergencyAdmin, setShowEmergencyAdmin] = useState(false);
+            
+            const [currentDate, setCurrentDate] = useState(new Date());
+            const [selectedDateStr, setSelectedDateStr] = useState(new Date().toISOString().split('T')[0]);
+            const [showTeamManager, setShowTeamManager] = useState(false);
+            const [assigningDate, setAssigningDate] = useState(null);
+            const [selectedNurseId, setSelectedNurseId] = useState('');
+            const [assignType, setAssignType] = useState('work');
+            const [selectedTourId, setSelectedTourId] = useState('long');
+            const [showTourPicker, setShowTourPicker] = useState(false);
+
+            useEffect(() => { if (window.lucide) lucide.createIcons(); });
+
+            const getTeamRef = () => db.collection('artifacts').doc(appIdSlug).collection('public').doc('data').collection('team');
+            const getReqRef = () => db.collection('artifacts').doc(appIdSlug).collection('public').doc('data').collection('requests');
+
+            useEffect(() => {
+                const unsub = auth.onAuthStateChanged(async (u) => {
+                    if (u) {
+                        setUser(u);
+                        const teamSnap = await getTeamRef().where('email', '==', u.email.toLowerCase()).get();
+                        if (!teamSnap.empty) {
+                            setProfile({ id: teamSnap.docs[0].id, ...teamSnap.docs[0].data() });
+                        } else {
+                            setError("Toegang geweigerd: Je staat niet in de teamlijst.");
+                            setShowEmergencyAdmin(true);
+                            auth.signOut();
+                        }
+                    } else {
+                        setUser(null);
+                        setProfile(null);
+                    }
+                    setLoading(false);
+                });
+                return () => unsub();
+            }, []);
+
+            useEffect(() => {
+                if (!profile) return;
+                const unsubTeam = getTeamRef().onSnapshot(snap => setTeam(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+                const unsubReq = getReqRef().onSnapshot(snap => setRequests(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+                return () => { unsubTeam(); unsubReq(); };
+            }, [profile]);
+
+            const handleAuth = async (e, forceAdmin = false) => {
+                if (e) e.preventDefault();
+                setError(null);
+                setLoading(true);
+                try {
+                    const emailLower = email.trim().toLowerCase();
+                    
+                    if (authMode === 'login') {
+                        await auth.signInWithEmailAndPassword(emailLower, password);
+                    } else {
+                        const adminSnap = await getTeamRef().where('isAdmin', '==', true).get();
+                        const noAdminExists = adminSnap.empty;
+
+                        if (!noAdminExists && !forceAdmin) {
+                            const teamCheck = await getTeamRef().where('email', '==', emailLower).get();
+                            if (teamCheck.empty) {
+                                setShowEmergencyAdmin(true);
+                                throw new Error("Jouw e-mailadres is nog niet toegevoegd aan de teamlijst.");
+                            }
+                        }
+
+                        // Als forceAdmin: eerst toevoegen aan database VOORDAT we account maken
+                        if (forceAdmin || noAdminExists) {
+                            await getTeamRef().add({
+                                name: name.trim() || "Hoofd Planner",
+                                email: emailLower,
+                                isAdmin: true
+                            });
+                        }
+
+                        await auth.createUserWithEmailAndPassword(emailLower, password);
+                        window.location.reload();
+                    }
+                } catch (err) {
+                    let msg = err.message;
+                    if (err.code === 'auth/invalid-credential') msg = "Inloggegevens onjuist. Controleer je e-mail en wachtwoord.";
+                    if (err.code === 'auth/email-already-in-use') msg = "Dit e-mailadres is al geregistreerd. Probeer in te loggen.";
+                    setError(msg);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const toggleAdminStatus = async (memberId, currentStatus) => {
+                await getTeamRef().doc(memberId).update({ isAdmin: !currentStatus });
+            };
+
+            const calendarDays = useMemo(() => {
+                const y = currentDate.getFullYear(), m = currentDate.getMonth();
+                const last = new Date(y, m + 1, 0).getDate();
+                const start = (new Date(y, m, 1).getDay() + 6) % 7;
+                const arr = [];
+                for (let i = 0; i < start; i++) arr.push(null);
+                for (let i = 1; i <= last; i++) {
+                    const dStr = `${y}-${String(m + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
+                    arr.push({ day: i, date: dStr, items: (requests || []).filter(r => r.date === dStr) });
+                }
+                return arr;
+            }, [currentDate, requests]);
+
+            if (loading && !user) return (
+                <div className="h-screen flex items-center justify-center bg-white font-black text-blue-600 animate-pulse text-[10px] uppercase tracking-widest">
+                    Systeem laden...
+                </div>
+            );
+
+            if (!user || !profile) return (
+                <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6 text-left">
+                    <div className="bg-white p-10 rounded-[2.5rem] shadow-2xl max-w-sm w-full border-t-[10px] border-blue-600 animate-in">
+                        <h1 className="text-2xl font-black text-slate-900 mb-8 uppercase italic tracking-tighter text-center">TEAMROOSTER</h1>
+                        
+                        <form onSubmit={handleAuth} className="space-y-4">
+                            {authMode === 'register' && (
+                                <div>
+                                    <label className="text-[10px] font-black uppercase text-slate-400 ml-2 block">Naam</label>
+                                    <input type="text" value={name} onChange={e => setName(e.target.value)} required className="w-full p-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 ring-blue-100 font-bold" />
+                                </div>
+                            )}
+                            <div>
+                                <label className="text-[10px] font-black uppercase text-slate-400 ml-2 block">E-mailadres</label>
+                                <input type="email" value={email} onChange={e => setEmail(e.target.value)} required className="w-full p-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 ring-blue-100 font-bold" />
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-black uppercase text-slate-400 ml-2 block">Wachtwoord</label>
+                                <input type="password" value={password} onChange={e => setPassword(e.target.value)} required className="w-full p-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 ring-blue-100 font-bold" />
+                            </div>
+                            
+                            {error && (
+                                <div className="p-4 bg-red-50 text-red-600 text-[11px] font-bold rounded-xl leading-relaxed">
+                                    {error}
+                                    {showEmergencyAdmin && authMode === 'register' && (
+                                        <button 
+                                            type="button"
+                                            onClick={() => handleAuth(null, true)}
+                                            className="block mt-4 bg-red-600 text-white p-4 rounded-xl w-full text-center uppercase text-[10px] font-black shadow-lg shadow-red-100 active:scale-95 transition-all"
+                                        >
+                                            Ik ben de eerste planner
+                                        </button>
+                                    )}
+                                </div>
+                            )}
+                            
+                            <button type="submit" disabled={loading} className="w-full bg-blue-600 text-white p-5 rounded-2xl font-black uppercase text-[12px] shadow-xl shadow-blue-100 active:scale-95 transition-all mt-4 disabled:opacity-50">
+                                {loading ? 'Bezig...' : (authMode === 'login' ? 'Inloggen' : 'Registreren')}
+                            </button>
+                        </form>
+                        
+                        <button onClick={() => { setAuthMode(authMode === 'login' ? 'register' : 'login'); setError(null); setShowEmergencyAdmin(false); }} className="w-full mt-6 text-[11px] font-black text-slate-400 uppercase tracking-widest hover:text-blue-600 transition-colors">
+                            {authMode === 'login' ? 'Nog geen account? Klik hier' : 'Al een account? Log hier in'}
+                        </button>
+                    </div>
+                </div>
+            );
+
+            return (
+                <div className="min-h-screen pb-12 text-left">
+                    <header className="bg-white px-8 h-20 flex items-center justify-between sticky top-0 z-40 border-b border-slate-100 shadow-sm">
+                        <div className="flex items-center gap-3 font-black text-slate-900 text-xl uppercase tracking-tighter italic">
+                            <i data-lucide="activity" className="w-6 h-6 text-blue-600"></i> TEAMROOSTER
+                        </div>
+                        <div className="flex items-center gap-4 text-right">
+                            <div className="hidden sm:block text-left">
+                                <div className="text-[10px] font-black uppercase text-slate-900 leading-none">{profile.name}</div>
+                                <div className="text-[9px] font-bold text-blue-600 uppercase tracking-widest mt-1">{profile.isAdmin ? 'Planner' : 'Zorgteam'}</div>
+                            </div>
+                            {profile.isAdmin && <button onClick={() => setShowTeamManager(!showTeamManager)} className={`p-3 rounded-2xl transition-all ${showTeamManager ? 'bg-blue-600 text-white shadow-lg' : 'bg-slate-100 text-slate-500'}`}><i data-lucide="users" className="w-5 h-5"></i></button>}
+                            <button onClick={() => auth.signOut()} className="p-3 bg-slate-100 text-slate-500 rounded-2xl hover:bg-red-50 hover:text-red-600 transition-all"><i data-lucide="log-out" className="w-5 h-5"></i></button>
+                        </div>
+                    </header>
+
+                    <main className="max-w-2xl mx-auto p-4 space-y-8 mt-4 text-left">
+                        {profile.isAdmin && showTeamManager && (
+                            <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100 space-y-6 animate-in">
+                                <h3 className="text-xs font-black uppercase tracking-widest italic text-blue-600">Team Beheren</h3>
+                                <div className="flex flex-col sm:flex-row gap-2">
+                                    <input type="text" placeholder="Naam" value={name} onChange={e => setName(e.target.value)} className="flex-1 p-4 bg-slate-50 rounded-2xl font-bold text-sm outline-none" />
+                                    <input type="email" placeholder="E-mail" value={email} onChange={e => setEmail(e.target.value.toLowerCase())} className="flex-1 p-4 bg-slate-50 rounded-2xl font-bold text-sm outline-none" />
+                                    <button onClick={() => {
+                                        if (name && email) {
+                                            getTeamRef().add({ name, email, isAdmin: false });
+                                            setName(''); setEmail('');
+                                        }
+                                    }} className="bg-blue-600 text-white px-8 py-4 rounded-2xl font-black text-[11px] uppercase shadow-lg shadow-blue-100">Toevoegen</button>
+                                </div>
+                                <div className="grid grid-cols-1 gap-3">
+                                    {team.map(n => (
+                                        <div key={n.id} className="p-5 bg-slate-50 rounded-3xl text-[12px] font-bold flex flex-wrap justify-between items-center gap-4">
+                                            <div className="flex flex-col flex-1 min-w-[150px]">
+                                                <div className="flex items-center gap-2">
+                                                    <span>{n.name}</span>
+                                                    {n.isAdmin && <span className="bg-blue-600 text-white text-[8px] px-2 py-0.5 rounded-full uppercase">Planner</span>}
+                                                </div>
+                                                <span className="text-[10px] text-slate-400 font-medium">{n.email}</span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                {n.email !== user.email && (
+                                                    <button 
+                                                        onClick={() => toggleAdminStatus(n.id, n.isAdmin)}
+                                                        className={`px-3 py-2 rounded-xl text-[9px] font-black uppercase transition-all ${n.isAdmin ? 'bg-slate-200 text-slate-600' : 'bg-blue-100 text-blue-700'}`}
+                                                    >
+                                                        {n.isAdmin ? 'Zet naar Zorgteam' : 'Maak Planner'}
+                                                    </button>
+                                                )}
+                                                {!n.isAdmin && (
+                                                    <button onClick={() => getTeamRef().doc(n.id).delete()} className="p-2 text-red-300 hover:text-red-600">
+                                                        <i data-lucide="trash-2" className="w-4 h-4"></i>
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="bg-white rounded-[3rem] shadow-2xl border border-slate-50 overflow-hidden animate-in">
+                            <div className="p-8 flex justify-between items-center text-center">
+                                <div className="flex gap-1">
+                                    <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() - 1)))} className="p-3 text-slate-300 hover:text-blue-600"><i data-lucide="chevron-left" className="w-7 h-7"></i></button>
+                                    <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() + 1)))} className="p-3 text-slate-300 hover:text-blue-600"><i data-lucide="chevron-right" className="w-7 h-7"></i></button>
+                                </div>
+                                <h2 className="font-black capitalize text-xl text-slate-900 tracking-tight italic">{currentDate.toLocaleString('nl-NL', { month: 'long', year: 'numeric' })}</h2>
+                                <div className="w-14"></div>
+                            </div>
+                            <div className="grid grid-cols-7 text-[10px] font-black text-slate-300 text-center pb-4 uppercase tracking-[0.2em]">
+                                {['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'].map(d => <div key={d}>{d}</div>)}
+                            </div>
+                            <div className="grid grid-cols-7 auto-rows-[100px] border-t border-slate-50">
+                                {calendarDays.map((d, i) => {
+                                    if (!d) return <div key={`empty-${i}`} className="bg-slate-50/20" />;
+                                    const isSel = selectedDateStr === d.date;
+                                    return (
+                                        <div key={d.date} onClick={() => setSelectedDateStr(d.date)} className={`relative p-2 flex flex-col items-center cursor-pointer transition-all ${isSel ? 'bg-blue-50/50 ring-4 ring-inset ring-blue-600 z-10' : 'hover:bg-slate-50/50'}`}>
+                                            <span className={`text-[13px] font-black mb-2 ${isSel ? 'text-blue-600' : 'text-slate-300'}`}>{d.day}</span>
+                                            <div className="flex flex-wrap gap-1 justify-center max-w-[45px]">
+                                                {d.items.map(it => {
+                                                    let color = 'bg-orange-500';
+                                                    if (it.status === 'confirmed') {
+                                                        if (it.type === 'work') color = it.isSwap ? 'bg-blue-500' : 'bg-green-500';
+                                                        else color = 'bg-white border border-slate-200 shadow-sm';
+                                                    }
+                                                    return <div key={it.id} className={`w-2 h-2 rounded-full shadow-sm ${color}`} />;
+                                                })}
+                                            </div>
+                                            {profile.isAdmin && (
+                                                <button onClick={(e) => { e.stopPropagation(); setAssigningDate(d.date); }} className="absolute bottom-1 right-1 bg-blue-600 text-white p-1.5 rounded-lg shadow-lg active:scale-90 z-20"><i data-lucide="plus" className="w-4 h-4"></i></button>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        <div className="bg-white rounded-[3rem] shadow-2xl border border-slate-100 p-10 space-y-8 animate-in text-left">
+                            <div className="flex justify-between items-center border-b border-slate-50 pb-5">
+                                <h3 className="font-black text-xs uppercase tracking-widest text-slate-900 italic">OVERZICHT</h3>
+                                <span className="text-[11px] font-black text-blue-600 bg-blue-50 px-5 py-2.5 rounded-2xl border border-blue-100">{new Date(selectedDateStr).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
+                            </div>
+                            <div className="space-y-4">
+                                {requests.filter(r => r.date === selectedDateStr).map(it => {
+                                    const canDelete = profile.isAdmin || it.userId === user.uid;
+                                    let barClass = 'bg-slate-100 text-slate-400';
+                                    if (it.status === 'confirmed') {
+                                        if (it.type === 'work') barClass = it.isSwap ? 'bg-blue-600 text-white' : 'bg-green-600 text-white';
+                                        else barClass = 'bg-slate-900 text-white';
+                                    }
+                                    return (
+                                        <div key={it.id} className={`p-6 rounded-[1.8rem] flex items-center justify-between transition-all ${barClass} shadow-md`}>
+                                            <div className="flex items-center gap-4 text-left">
+                                                {it.isSwap ? <i data-lucide="arrow-left-right" className="w-5 h-5"></i> : (it.type === 'work' ? <i data-lucide="activity" className="w-5 h-5"></i> : <i data-lucide="sun" className="w-5 h-5"></i>)}
+                                                <div className="flex flex-col text-left">
+                                                    <span className="font-black text-lg tracking-tight leading-tight">{it.userName}</span>
+                                                    {it.tourId && it.type === 'work' && <span className="text-[10px] font-bold uppercase opacity-60 tracking-wider">{TOUR_TYPES.find(t => t.id === it.tourId)?.label}</span>}
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-4">
+                                                {it.status === 'confirmed' ? <i data-lucide="check-circle" className="w-5 h-5 opacity-90"></i> : <i data-lucide="clock" className="w-5 h-5 animate-pulse opacity-40"></i>}
+                                                {canDelete && <button onClick={() => getReqRef().doc(it.id).delete()} className="p-2 hover:bg-white/10 rounded-xl transition-all"><i data-lucide="trash-2" className="w-5 h-5"></i></button>}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                                
+                                {!profile.isAdmin && !showTourPicker && (
+                                    <div className="grid grid-cols-2 gap-4 mt-8 pt-8 border-t border-slate-50 text-left">
+                                        <button onClick={() => setShowTourPicker(true)} className="bg-slate-50 text-slate-900 p-8 rounded-[2rem] font-black text-[11px] border border-slate-100 flex flex-col items-center gap-3 uppercase shadow-sm transition-all hover:bg-slate-100 active:scale-95 text-left"><i data-lucide="plus" className="w-7 h-7 text-green-600"></i> Werken</button>
+                                        <button onClick={() => getReqRef().add({ userId: user.uid, userName: profile.name, date: selectedDateStr, type: 'off', status: 'pending' })} className="bg-slate-50 text-slate-900 p-8 rounded-[2rem] font-black text-[11px] border border-slate-100 flex flex-col items-center gap-3 uppercase shadow-sm transition-all hover:bg-slate-100 active:scale-95 text-left"><i data-lucide="sun" className="w-7 h-7 text-orange-600"></i> Verlof</button>
+                                    </div>
+                                )}
+                                
+                                {showTourPicker && (
+                                    <div className="mt-8 pt-6 border-t border-slate-50 animate-in text-left">
+                                        <div className="flex justify-between items-center mb-6 px-2 text-slate-900 text-left text-left"><span className="text-[11px] font-black uppercase tracking-widest text-slate-400">Tour selecteren:</span><button onClick={() => setShowTourPicker(false)} className="text-slate-300">✖</button></div>
+                                        <div className="grid grid-cols-2 gap-3 text-left">
+                                            {TOUR_TYPES.map(t => <button key={t.id} onClick={() => { getReqRef().add({ userId: user.uid, userName: profile.name, date: selectedDateStr, type: 'work', tourId: t.id, status: 'pending' }); setShowTourPicker(false); }} className="p-4 bg-white border-2 border-slate-100 rounded-2xl font-black text-[10px] uppercase hover:border-green-600 hover:text-green-600 transition-all text-slate-600 shadow-sm">{t.label}</button>)}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {profile.isAdmin && requests.filter(r => r.status === 'pending').length > 0 && (
+                            <div className="bg-white rounded-[3rem] shadow-xl border-4 border-blue-50 p-8 space-y-6 text-left animate-in">
+                                <h3 className="font-black text-xs uppercase tracking-widest text-blue-600 px-2 italic">Aanvragen</h3>
+                                {requests.filter(r => r.status === 'pending').map(req => (
+                                    <div key={req.id} className="p-6 rounded-[2rem] border-2 bg-slate-50 border-slate-100 shadow-sm text-left">
+                                        <div className="flex justify-between items-start mb-4 text-left text-left">
+                                            <div className="text-left text-slate-900">
+                                                <div className="text-lg font-black leading-tight text-left text-left">{req.userName}</div>
+                                                <div className="text-[10px] font-black text-blue-600 uppercase mt-1">{new Date(req.date).toLocaleDateString('nl-NL')}</div>
+                                            </div>
+                                            <span className={`text-[9px] font-black px-3 py-1.5 rounded-xl border uppercase tracking-widest ${req.type === 'work' ? 'bg-green-100 text-green-800 border-green-200' : 'bg-orange-100 text-orange-800 border-orange-200'}`}>{req.type === 'work' ? 'Werken' : 'Verlof'}</span>
+                                        </div>
+                                        <div className="flex gap-3">
+                                            <button onClick={() => getReqRef().doc(req.id).update({ status: 'confirmed' })} className="flex-1 bg-slate-900 text-white p-4 rounded-2xl font-black text-[10px] uppercase shadow-md active:scale-95 transition-all">Bevestigen</button>
+                                            <button onClick={() => getReqRef().doc(req.id).delete()} className="flex-1 bg-white border-2 border-slate-200 p-4 rounded-2xl font-black text-red-500 uppercase shadow-sm active:scale-95 transition-all">Weigeren</button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {profile.isAdmin && assigningDate && (
+                            <div className="bg-blue-600 rounded-[3rem] p-10 text-white shadow-2xl space-y-6 animate-in relative overflow-hidden text-left z-50">
+                                <div className="flex justify-between items-center font-black text-xs uppercase tracking-widest relative z-10 text-left"><span>Handmatig Inplannen</span><button onClick={() => setAssigningDate(null)} className="p-2 text-white">✖</button></div>
+                                <div className="text-[11px] font-black bg-blue-700/50 p-4 rounded-2xl text-center my-6 relative font-mono tracking-widest italic">{new Date(assigningDate).toLocaleDateString('nl-NL')}</div>
+                                <div className="space-y-4 relative z-10 text-slate-900 text-left">
+                                    <select value={selectedNurseId} onChange={e => setSelectedNurseId(e.target.value)} className="w-full p-5 rounded-3xl bg-white font-bold text-sm outline-none border-none shadow-lg text-[#1e293b]">
+                                        <option value="">-- Kies Collega --</option>
+                                        {team.filter(t => !t.isAdmin).map(n => <option key={n.id} value={n.id}>{n.name}</option>)}
+                                    </select>
+                                    <div className="grid grid-cols-2 gap-4 text-left text-left">
+                                        <button onClick={() => setAssignType('work')} className={`p-5 rounded-3xl border-2 font-black text-[11px] uppercase transition-all ${assignType === 'work' ? 'bg-white text-blue-600 border-white shadow-xl' : 'border-blue-400 bg-blue-700/20 text-white'}`}>Dienst</button>
+                                        <button onClick={() => setAssignType('off')} className={`p-5 rounded-3xl border-2 font-black text-[11px] uppercase transition-all ${assignType === 'off' ? 'bg-white text-slate-900 border-white shadow-xl' : 'border-blue-400 bg-blue-700/20 text-white'}`}>Verlof</button>
+                                    </div>
+                                    {assignType === 'work' && (
+                                        <select value={selectedTourId} onChange={e => setSelectedTourId(e.target.value)} className="w-full p-5 rounded-3xl bg-white font-bold text-sm outline-none shadow-lg text-[#1e293b]">
+                                            {TOUR_TYPES.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+                                        </select>
+                                    )}
+                                </div>
+                                <button onClick={() => {
+                                    const nurse = team.find(t => t.id === selectedNurseId);
+                                    if(!nurse) return;
+                                    getReqRef().add({ 
+                                        userId: nurse.id, 
+                                        userName: nurse.name, 
+                                        date: assigningDate, 
+                                        type: assignType, 
+                                        tourId: assignType === 'work' ? selectedTourId : null, 
+                                        status: 'confirmed' 
+                                    });
+                                    setAssigningDate(null);
+                                }} className="w-full bg-slate-900 text-white p-6 rounded-[1.8rem] font-black uppercase text-[12px] shadow-2xl active:scale-95 border border-white/5 mt-4 transition-all">Bevestigen</button>
+                            </div>
+                        )}
+                    </main>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
