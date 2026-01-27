@@ -430,10 +430,11 @@
                 measurementId: "G-ZNKGTXMPKD"
             };
 
-            if (!firebase.apps.length) firebase.initializeApp(config);
+           if (!firebase.apps.length) {
+               firebase.initializeApp(firebaseConfig);
+            }
             auth = firebase.auth();
             db = firebase.firestore();
-
             const root = ReactDOM.createRoot(document.getElementById('root'));
             root.render(<App />);
         };
