@@ -416,9 +416,9 @@
             );
         };
 
-        // --- Firebase Polling & App Start ---
-       const startApp = () => {
-            console.log("🚀 Firebase wordt geïnitialiseerd met:", window.ENV_PROJECT_ID);
+        // --- Firebase Initialisatie & App Start ---
+        const startApp = () => {
+            console.log("🚀 Firebase wordt geïnitialiseerd via GitHub Pages...");
             
             const firebaseConfig = {
                 apiKey: "AIzaSyA245VLavQatScTSg43GONSjGTa35jbpns",
@@ -430,39 +430,21 @@
                 measurementId: "G-ZNKGTXMPKD"
             };
 
-           if (!firebase.apps.length) {
-               firebase.initializeApp(firebaseConfig);
+            // Initialiseer Firebase alleen als er nog geen app draait
+            if (!firebase.apps.length) {
+                firebase.initializeApp(firebaseConfig);
             }
+            
             auth = firebase.auth();
             db = firebase.firestore();
+
+            // Start de React app
             const root = ReactDOM.createRoot(document.getElementById('root'));
             root.render(<App />);
         };
 
-        let retryCount = 0;
-        const checkConfigAndStart = () => {
-            // Debugging: zie wat Netlify daadwerkelijk in de pagina heeft gezet
-            console.log(`Poging ${retryCount}: API Key is:`, window.ENV_API_KEY);
-
-            const isValid = window.ENV_API_KEY && 
-                          window.ENV_API_KEY !== 'undefined' && 
-                          !window.ENV_API_KEY.includes('{{env');
-
-            if (isValid) {
-                console.log("✅ Configuratie gevonden! App start...");
-                startApp();
-            } else {
-                retryCount++;
-                if (retryCount > 50) { // Stop na 5 seconden met proberen
-                    console.error("❌ Configuratie laden mislukt. Controleer Netlify Snippet Injection.");
-                    document.getElementById('root').innerHTML = "<div class='p-10 text-red-500 font-bold'>Fout: Kan Firebase-sleutels niet vinden. Controleer Netlify instellingen.</div>";
-                    return;
-                }
-                setTimeout(checkConfigAndStart, 100);
-            }
-        };
-
-        checkConfigAndStart();
+        // Start de app direct (geen Netlify-checks meer nodig)
+        startApp();
 
     </script>
 </body>
