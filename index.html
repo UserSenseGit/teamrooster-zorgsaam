@@ -420,14 +420,14 @@
        const startApp = () => {
             console.log("🚀 Firebase wordt geïnitialiseerd met:", window.ENV_PROJECT_ID);
             
-            const config = {
-                apiKey: window.ENV_API_KEY,
-                authDomain: window.ENV_AUTH_DOMAIN,
-                projectId: window.ENV_PROJECT_ID,
-                storageBucket: window.ENV_STORAGE_BUCKET,
-                messagingSenderId: window.ENV_MESSAGING_SENDER_ID,
-                appId: window.ENV_APP_ID,
-                measurementId: window.ENV_MEASUREMENT_ID
+            const firebaseConfig = {
+                apiKey: "AIzaSyA245VLavQatScTSg43GONSjGTa35jbpns",
+                authDomain: "rooster-zorgsaam.firebaseapp.com",
+                projectId: "rooster-zorgsaam",
+                storageBucket: "rooster-zorgsaam.firebasestorage.app",
+                messagingSenderId: "392518422646",
+                appId: "1:392518422646:web:9731772220cb1544674f57",
+                measurementId: "G-ZNKGTXMPKD"
             };
 
             if (!firebase.apps.length) firebase.initializeApp(config);
