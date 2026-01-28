@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TeamRooster v48 - Direct Delete</title>
+    <title>TeamRooster v48 - Regime Fix</title>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -18,7 +18,15 @@
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .animate-in { animation: fadeIn 0.3s ease-out forwards; }
         .dark-transition { transition: background-color 0.3s, border-color 0.3s, color 0.3s; }
-        select { color: #1e293b !important; }
+        
+        /* Forceer zichtbare tekst in alle browsers en toestanden */
+        select, option { 
+            color: #1e293b !important; 
+        }
+        .dark select, .dark option {
+            color: #ffffff !important;
+            background-color: #1e293b !important;
+        }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-900 font-sans dark-transition">
@@ -63,7 +71,7 @@
             const [email, setEmail] = useState('');
             const [password, setPassword] = useState('');
             const [name, setName] = useState('');
-            const [contractType, setContractType] = useState('voltijds');
+            const [regime, setRegime] = useState('voltijds');
             const [error, setError] = useState(null);
             const [showManager, setShowManager] = useState(null);
             
@@ -192,24 +200,28 @@
                                                 <input type="email" placeholder="E-mail" value={email} onChange={e => setEmail(e.target.value.toLowerCase())} className={`p-4 rounded-2xl font-bold outline-none ${isDarkMode ? 'bg-slate-800 text-white' : 'bg-slate-50 text-slate-900'}`} />
                                             </div>
                                             <div className="flex flex-col gap-2">
-                                                <span className="text-[10px] font-black uppercase text-slate-400 px-2">Werkduursjabloon:</span>
-                                                <select value={contractType} onChange={e => setContractType(e.target.value)} className={`p-4 rounded-2xl font-bold outline-none ${isDarkMode ? 'bg-slate-800 text-white' : 'bg-slate-50 text-slate-900'}`}>
+                                                <span className="text-[10px] font-black uppercase text-slate-400 px-2">Regime:</span>
+                                                <select 
+                                                    value={regime} 
+                                                    onChange={e => setRegime(e.target.value)} 
+                                                    className={`p-4 rounded-2xl font-bold outline-none appearance-none cursor-pointer border-2 border-transparent focus:border-blue-600 shadow-inner ${isDarkMode ? 'bg-slate-800 text-white' : 'bg-slate-50 text-slate-900'}`}
+                                                >
                                                     <option value="voltijds">Voltijds (100%)</option>
                                                     <option value="deeltijds">Deeltijds</option>
                                                     <option value="oproep">Oproepbasis</option>
                                                     <option value="stagiair">Stagiair</option>
                                                 </select>
                                             </div>
-                                            <button onClick={() => { if(name && email) getTeamRef().add({ name, email, contractType, isAdmin: false }); setName(''); setEmail(''); setContractType('voltijds'); }} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black text-[11px] uppercase">Lid Toevoegen</button>
+                                            <button onClick={() => { if(name && email) getTeamRef().add({ name, email, regime, isAdmin: false }); setName(''); setEmail(''); setRegime('voltijds'); }} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black text-[11px] uppercase shadow-lg active:scale-[0.98] transition-transform">Lid Toevoegen</button>
                                         </div>
                                         <div className="space-y-2">
                                             {team.map(n => (
                                                 <div key={n.id} className={`p-4 rounded-2xl flex justify-between items-center ${isDarkMode ? 'bg-slate-800' : 'bg-slate-50'}`}>
-                                                    <div className="flex flex-col">
+                                                    <div className="flex flex-col text-left">
                                                         <span className="font-bold">{n.name} {n.id === profile.id && '(Jij)'}</span>
                                                         <div className="flex gap-2 items-center">
                                                             <span className="text-[9px] text-slate-400 font-bold uppercase">{n.isAdmin ? 'Planner' : 'Zorgteam'}</span>
-                                                            {n.contractType && <span className="text-[9px] bg-blue-100 dark:bg-blue-900/30 text-blue-600 px-2 py-0.5 rounded-full font-black uppercase">{n.contractType}</span>}
+                                                            {n.regime && <span className="text-[9px] bg-blue-100 dark:bg-blue-900/30 text-blue-600 px-2 py-0.5 rounded-full font-black uppercase">{n.regime}</span>}
                                                         </div>
                                                     </div>
                                                     <div className="flex items-center gap-2">
@@ -217,7 +229,7 @@
                                                             <button onClick={() => getTeamRef().doc(n.id).update({ isAdmin: !n.isAdmin })} className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase transition-all ${n.isAdmin ? 'bg-slate-300 text-slate-700' : 'bg-blue-100 text-blue-600'}`}>{n.isAdmin ? 'Degradeer' : 'Promoveer'}</button>
                                                         )}
                                                         {n.id !== profile.id && (
-                                                            <button onClick={() => getTeamRef().doc(n.id).delete()} className="text-red-400 p-2"><IconTrash /></button>
+                                                            <button onClick={() => getTeamRef().doc(n.id).delete()} className="text-red-400 p-2 hover:bg-red-500/10 rounded-xl transition-colors"><IconTrash /></button>
                                                         )}
                                                     </div>
                                                 </div>
@@ -352,12 +364,16 @@
 
                     {assigningDate && (
                         <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-6">
-                            <div className="bg-blue-600 rounded-[3rem] p-10 text-white shadow-2xl max-w-sm w-full space-y-6 animate-in relative overflow-hidden">
+                            <div className="bg-blue-600 rounded-[3rem] p-10 text-white shadow-2xl max-w-sm w-full space-y-6 animate-in relative overflow-hidden text-left">
                                 <div className="flex justify-between items-center font-black text-xs uppercase tracking-widest relative z-10 text-white"><span>Inplannen</span><button onClick={() => setAssigningDate(null)}>✖</button></div>
                                 <div className="text-[11px] font-black bg-blue-700/50 p-4 rounded-2xl text-center italic text-white">{new Date(assigningDate).toLocaleDateString('nl-NL')}</div>
                                 <div className="space-y-4 relative z-10">
-                                    <select value={selectedNurseId} onChange={e => setSelectedNurseId(e.target.value)} className="w-full p-5 rounded-3xl bg-white text-slate-900 font-bold text-sm outline-none border-none shadow-lg">
-                                        <option value="">-- Kies Collega --</option>
+                                    <select 
+                                        value={selectedNurseId} 
+                                        onChange={e => setSelectedNurseId(e.target.value)} 
+                                        className="w-full p-5 rounded-3xl bg-white text-slate-900 font-bold text-sm outline-none border-none shadow-lg appearance-none cursor-pointer"
+                                    >
+                                        <option value="" className="text-slate-900">-- Kies Collega --</option>
                                         {team.map(n => <option key={n.id} value={n.id} className="text-slate-900">{n.name}</option>)}
                                     </select>
                                     <div className="grid grid-cols-2 gap-4">
@@ -365,7 +381,11 @@
                                         <button onClick={() => setAssignType('off')} className={`p-5 rounded-3xl border-2 font-black text-[11px] uppercase transition-all ${assignType === 'off' ? 'bg-white text-slate-900 border-white' : 'border-blue-400 text-white'}`}>Verlof</button>
                                     </div>
                                     {assignType === 'work' && (
-                                        <select value={selectedTourId} onChange={e => setSelectedTourId(e.target.value)} className="w-full p-5 rounded-3xl bg-white text-slate-900 font-bold text-sm outline-none shadow-lg">
+                                        <select 
+                                            value={selectedTourId} 
+                                            onChange={e => setSelectedTourId(e.target.value)} 
+                                            className="w-full p-5 rounded-3xl bg-white text-slate-900 font-bold text-sm outline-none shadow-lg appearance-none cursor-pointer"
+                                        >
                                             {tours.map(t => <option key={t.id} value={t.id} className="text-slate-900">{t.label}</option>)}
                                         </select>
                                     )}
