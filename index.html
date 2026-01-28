@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TeamRooster v48 - UI Fix</title>
+    <title>TeamRooster v48 - Direct Delete</title>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -11,7 +11,6 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
@@ -19,8 +18,6 @@
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .animate-in { animation: fadeIn 0.3s ease-out forwards; }
         .dark-transition { transition: background-color 0.3s, border-color 0.3s, color 0.3s; }
-        
-        /* Forceer zwarte tekst in select-velden voor browser consistentie */
         select { color: #1e293b !important; }
     </style>
 </head>
@@ -48,6 +45,12 @@
             'bg-purple-500', 'bg-fuchsia-500', 'bg-pink-500', 'bg-rose-500',
             'bg-orange-500', 'bg-amber-500', 'bg-yellow-500', 'bg-emerald-500'
         ];
+
+        // Icon Components to avoid Lucide rendering delays
+        const IconTrash = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>;
+        const IconPlus = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>;
+        const IconSun = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>;
+        const IconActivity = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>;
 
         const App = () => {
             const [user, setUser] = useState(null);
@@ -89,8 +92,7 @@
 
             useEffect(() => {
                 document.body.className = isDarkMode ? 'bg-slate-950 text-slate-100 dark-transition' : 'bg-slate-50 text-slate-900 dark-transition';
-                if (window.lucide) lucide.createIcons();
-            }, [isDarkMode, loading, showManager, assigningDate, requests]);
+            }, [isDarkMode]);
 
             useEffect(() => {
                 const unsub = auth.onAuthStateChanged(async (u) => {
@@ -123,7 +125,7 @@
                     const existing = requests.find(r => r.date === req.date && r.tourId === req.tourId && r.status === 'confirmed' && r.id !== req.id);
                     if (existing) batch.delete(getReqRef().doc(existing.id));
                 }
-                batch.update(getReqRef().doc(req.id), { status: 'confirmed', isSwap: false });
+                batch.update(getReqRef().doc(req.id), { status: 'confirmed' });
                 await batch.commit();
             };
 
@@ -152,26 +154,26 @@
                 <div className={`min-h-screen pb-12 ${isDarkMode ? 'dark' : ''}`}>
                     <header className={`px-8 h-20 flex items-center justify-between sticky top-0 z-40 border-b shadow-sm dark-transition ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
                         <div className="flex items-center gap-3 font-black text-xl uppercase italic tracking-tighter">
-                            <i data-lucide="activity" className="w-6 h-6 text-blue-600"></i> TEAMROOSTER
+                            <span className="text-blue-600"><IconActivity /></span> TEAMROOSTER
                         </div>
                         <div className="flex items-center gap-3">
                             <button onClick={() => setIsDarkMode(!isDarkMode)} className={`p-3 rounded-2xl transition-all ${isDarkMode ? 'bg-slate-800 text-yellow-400' : 'bg-slate-100 text-slate-500'}`}>
-                                <i data-lucide={isDarkMode ? "sun" : "moon"} className="w-5 h-5"></i>
+                                {isDarkMode ? '☀️' : '🌙'}
                             </button>
                             {profile?.isAdmin && (
                                 <div className="flex gap-2">
-                                    <button onClick={() => setShowManager(showManager === 'tours' ? null : 'tours')} className={`p-3 rounded-2xl ${showManager === 'tours' ? 'bg-blue-600 text-white shadow-lg' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}><i data-lucide="layers" className="w-5 h-5"></i></button>
-                                    <button onClick={() => setShowManager(showManager === 'team' ? null : 'team')} className={`p-3 rounded-2xl ${showManager === 'team' ? 'bg-blue-600 text-white shadow-lg' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}><i data-lucide="users" className="w-5 h-5"></i></button>
+                                    <button onClick={() => setShowManager(showManager === 'tours' ? null : 'tours')} className={`p-3 rounded-2xl ${showManager === 'tours' ? 'bg-blue-600 text-white shadow-lg' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}>⚙️</button>
+                                    <button onClick={() => setShowManager(showManager === 'team' ? null : 'team')} className={`p-3 rounded-2xl ${showManager === 'team' ? 'bg-blue-600 text-white shadow-lg' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}>👥</button>
                                 </div>
                             )}
-                            <button onClick={() => auth.signOut()} className="p-3 bg-slate-100 dark:bg-slate-800 text-slate-500 rounded-2xl hover:text-red-500"><i data-lucide="log-out" className="w-5 h-5"></i></button>
+                            <button onClick={() => auth.signOut()} className="p-3 bg-slate-100 dark:bg-slate-800 text-slate-500 rounded-2xl hover:text-red-500">🚪</button>
                         </div>
                     </header>
 
                     <main className="max-w-2xl mx-auto p-4 space-y-8 mt-4 text-left">
                         {!user ? (
                             <div className={`p-10 rounded-[2.5rem] shadow-2xl max-w-sm mx-auto border-t-[10px] border-blue-600 animate-in ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white'}`}>
-                                <h1 className="text-2xl font-black mb-8 uppercase italic text-center">Inloggen</h1>
+                                <h1 className="text-2xl font-black mb-8 uppercase italic text-center text-slate-900 dark:text-white">Inloggen</h1>
                                 <form onSubmit={(e) => { e.preventDefault(); auth.signInWithEmailAndPassword(email, password).catch(err => setError(err.message)); }} className="space-y-4">
                                     <input type="email" placeholder="E-mail" value={email} onChange={e => setEmail(e.target.value)} className={`w-full p-4 rounded-2xl font-bold outline-none border border-transparent focus:border-blue-600 ${isDarkMode ? 'bg-slate-800 text-white' : 'bg-slate-50 text-slate-900'}`} required />
                                     <input type="password" placeholder="Wachtwoord" value={password} onChange={e => setPassword(e.target.value)} className={`w-full p-4 rounded-2xl font-bold outline-none border border-transparent focus:border-blue-600 ${isDarkMode ? 'bg-slate-800 text-white' : 'bg-slate-50 text-slate-900'}`} required />
@@ -180,7 +182,7 @@
                                 </form>
                             </div>
                         ) : (
-                            <div className="space-y-8 animate-in text-left">
+                            <div className="space-y-8 animate-in">
                                 {showManager === 'team' && (
                                     <div className={`p-8 rounded-[2.5rem] shadow-xl border animate-in space-y-6 ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
                                         <h3 className="text-xs font-black uppercase tracking-widest text-blue-600 italic">Teambeheer</h3>
@@ -203,7 +205,7 @@
                                                             <button onClick={() => getTeamRef().doc(n.id).update({ isAdmin: !n.isAdmin })} className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase transition-all ${n.isAdmin ? 'bg-slate-300 text-slate-700' : 'bg-blue-100 text-blue-600'}`}>{n.isAdmin ? 'Degradeer' : 'Promoveer'}</button>
                                                         )}
                                                         {n.id !== profile.id && (
-                                                            <button onClick={() => getTeamRef().doc(n.id).delete()} className="text-red-400 p-2"><i data-lucide="trash-2" className="w-4 h-4"></i></button>
+                                                            <button onClick={() => getTeamRef().doc(n.id).delete()} className="text-red-400 p-2"><IconTrash /></button>
                                                         )}
                                                     </div>
                                                 </div>
@@ -228,7 +230,7 @@
                                             {tours.map(t => (
                                                 <div key={t.id} className={`p-4 rounded-2xl flex justify-between items-center ${isDarkMode ? 'bg-slate-800' : 'bg-slate-50'}`}>
                                                     <div className="flex items-center gap-3"><div className={`w-4 h-4 rounded-full ${t.color}`}></div><span className="font-bold">{t.label}</span></div>
-                                                    <button onClick={() => getToursRef().doc(t.id).delete()} className="text-red-400 p-2"><i data-lucide="trash-2" className="w-4 h-4"></i></button>
+                                                    <button onClick={() => getToursRef().doc(t.id).delete()} className="text-red-400 p-2"><IconTrash /></button>
                                                 </div>
                                             ))}
                                         </div>
@@ -236,10 +238,10 @@
                                 )}
 
                                 <div className={`rounded-[3rem] shadow-2xl border overflow-hidden ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-50'}`}>
-                                    <div className="p-8 flex justify-between items-center text-left">
-                                        <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() - 1)))} className="p-3 text-slate-400"><i data-lucide="chevron-left" className="w-7 h-7"></i></button>
+                                    <div className="p-8 flex justify-between items-center">
+                                        <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() - 1)))} className="p-3 text-slate-400 text-xl">◀</button>
                                         <h2 className="font-black capitalize text-xl italic tracking-tight">{currentDate.toLocaleString('nl-NL', { month: 'long', year: 'numeric' })}</h2>
-                                        <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() + 1)))} className="p-3 text-slate-400"><i data-lucide="chevron-right" className="w-7 h-7"></i></button>
+                                        <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() + 1)))} className="p-3 text-slate-400 text-xl">▶</button>
                                     </div>
                                     <div className="grid grid-cols-7 text-[10px] font-black text-slate-400 text-center pb-4 uppercase tracking-[0.2em]">
                                         {['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'].map(d => <div key={d}>{d}</div>)}
@@ -264,12 +266,16 @@
                                     </div>
                                 </div>
 
-                                <div className={`rounded-[3rem] shadow-2xl p-10 space-y-8 border ${isDarkMode ? 'bg-slate-900 border-slate-800 shadow-black' : 'bg-white border-slate-100 shadow-slate-100'}`}>
+                                <div className={`rounded-[3rem] shadow-2xl p-10 space-y-8 border ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100 shadow-slate-100'}`}>
                                     <div className="flex justify-between items-center border-b pb-5 dark:border-slate-800">
                                         <h3 className="font-black text-xs uppercase tracking-widest italic text-slate-900 dark:text-slate-100">DAGOVERZICHT</h3>
                                         <div className="flex flex-col items-end">
                                             <span className="text-[11px] font-black text-blue-600 bg-blue-50 dark:bg-blue-900/20 px-5 py-2.5 rounded-2xl">{new Date(selectedDateStr).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long' })}</span>
-                                            {profile?.isAdmin && <button onClick={() => setAssigningDate(selectedDateStr)} className="mt-2 text-[10px] font-black text-blue-500 uppercase flex items-center gap-1 hover:underline"><i data-lucide="user-plus" className="w-3 h-3"></i> Inplannen</button>}
+                                            {profile?.isAdmin && (
+                                                <button onClick={() => setAssigningDate(selectedDateStr)} className="mt-2 text-[10px] font-black text-blue-500 uppercase flex items-center gap-1 hover:underline">
+                                                    ➕ Inplannen
+                                                </button>
+                                            )}
                                         </div>
                                     </div>
                                     <div className="space-y-4">
@@ -278,19 +284,24 @@
                                             const isConfirmed = it.status === 'confirmed';
                                             const canDelete = profile?.isAdmin || it.userId === user.uid;
                                             return (
-                                                <div key={it.id} className={`p-6 rounded-[1.8rem] flex items-center justify-between shadow-md transition-all ${isConfirmed ? (it.type === 'work' ? `${tour?.color || 'bg-slate-500'} text-white` : 'bg-slate-800 text-white') : (isDarkMode ? 'bg-slate-800 text-slate-400' : 'bg-slate-100 text-slate-400')}`}>
+                                                <div key={it.id} className={`p-6 rounded-[1.8rem] flex items-center justify-between shadow-md transition-all animate-in ${isConfirmed ? (it.type === 'work' ? `${tour?.color || 'bg-slate-500'} text-white` : 'bg-slate-800 text-white') : (isDarkMode ? 'bg-slate-800 text-slate-400' : 'bg-slate-100 text-slate-400')}`}>
                                                     <div className="flex items-center gap-4 text-left">
-                                                        <i data-lucide={it.type === 'work' ? "activity" : "sun"} className="w-5 h-5"></i>
+                                                        <span className="opacity-80">{it.type === 'work' ? <IconActivity /> : <IconSun />}</span>
                                                         <div><div className="font-black text-lg tracking-tight leading-tight">{it.userName}</div><div className="text-[10px] font-bold uppercase opacity-60">{tour?.label || (it.type === 'off' ? 'Verlof' : 'Dienst')}</div></div>
                                                     </div>
-                                                    {canDelete && <button onClick={() => getReqRef().doc(it.id).delete()} className="p-2 hover:bg-white/10 rounded-xl transition-all"><i data-lucide="trash-2" className="w-5 h-5"></i></button>}
+                                                    {canDelete && (
+                                                        <button onClick={() => getReqRef().doc(it.id).delete()} className="p-3 hover:bg-black/20 rounded-2xl transition-all text-white">
+                                                            <IconTrash />
+                                                        </button>
+                                                    )}
                                                 </div>
                                             );
                                         })}
+                                        
                                         {!profile?.isAdmin && !showTourPicker && (
                                             <div className="grid grid-cols-2 gap-4 mt-8 pt-8 border-t dark:border-slate-800">
-                                                <button onClick={() => setShowTourPicker(true)} className={`p-8 rounded-[2rem] font-black text-[11px] border flex flex-col items-center gap-3 uppercase shadow-sm ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-100'}`}><i data-lucide="plus" className="w-7 h-7 text-green-500"></i> Werken</button>
-                                                <button onClick={() => getReqRef().add({ userId: user.uid, userName: profile.name, date: selectedDateStr, type: 'off', status: 'pending' })} className={`p-8 rounded-[2rem] font-black text-[11px] border flex flex-col items-center gap-3 uppercase shadow-sm ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-100'}`}><i data-lucide="sun" className="w-7 h-7 text-orange-500"></i> Verlof</button>
+                                                <button onClick={() => setShowTourPicker(true)} className={`p-8 rounded-[2rem] font-black text-[11px] border flex flex-col items-center gap-3 uppercase shadow-sm ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-100'}`}><span className="text-green-500"><IconPlus /></span> Werken</button>
+                                                <button onClick={() => getReqRef().add({ userId: user.uid, userName: profile.name, date: selectedDateStr, type: 'off', status: 'pending' })} className={`p-8 rounded-[2rem] font-black text-[11px] border flex flex-col items-center gap-3 uppercase shadow-sm ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-100'}`}><span className="text-orange-500"><IconSun /></span> Verlof</button>
                                             </div>
                                         )}
                                         {showTourPicker && (
@@ -311,7 +322,7 @@
                                         <h3 className="font-black text-xs uppercase tracking-widest text-blue-600 italic">Openstaande Aanvragen</h3>
                                         {requests.filter(r => r.status === 'pending').map(req => (
                                             <div key={req.id} className={`p-6 rounded-[2rem] border-2 space-y-4 ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
-                                                <div className="flex justify-between items-start">
+                                                <div className="flex justify-between items-start text-left">
                                                     <div><div className="text-lg font-black text-slate-900 dark:text-white leading-tight">{req.userName}</div><div className="text-[10px] font-black text-blue-600 uppercase">{new Date(req.date).toLocaleDateString('nl-NL')}</div></div>
                                                     <span className={`text-[9px] font-black px-3 py-1.5 rounded-xl border uppercase ${req.type === 'work' ? 'bg-green-500/10 text-green-500 border-green-500/20' : 'bg-orange-500/10 text-orange-500 border-orange-500/20'}`}>{req.type === 'work' ? 'Werken' : 'Verlof'}</span>
                                                 </div>
